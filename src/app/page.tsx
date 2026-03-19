@@ -92,7 +92,17 @@ export default function HomePage() {
   const [creating, setCreating] = useState(false);
 
   useEffect(() => {
-    async function loadCsv() {
+    async function initialLoad() {
+      const { data, error } = await supabase
+        .from("hotels")
+        .select("*")
+        .order("id", { ascending: true });
+
+      if (!error && data && data.length > 0) {
+        setHotels(data as Hotel[]);
+        return;
+      }
+
       const res = await fetch("/data/hotels.csv");
       const text = await res.text();
       const parsed = parseHotelsCsv(text).map((hotel) => ({
@@ -103,7 +113,7 @@ export default function HomePage() {
       setHotels(parsed);
     }
 
-    loadCsv();
+    initialLoad();
   }, []);
 
   async function geocodeAll() {
