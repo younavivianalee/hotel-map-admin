@@ -8,6 +8,64 @@ import { supabase } from "@/lib/supabase";
 
 const STATUS_OPTIONS = ["미접촉", "검토중", "제안완료", "운영중", "보류"];
 
+function extractRegionFromAddress(address: string) {
+  const normalized = address.trim();
+
+  if (normalized.startsWith("서울")) return "서울";
+  if (normalized.startsWith("부산")) return "부산";
+  if (normalized.startsWith("대구")) return "대구";
+  if (normalized.startsWith("인천")) return "인천";
+  if (normalized.startsWith("광주")) return "광주";
+  if (normalized.startsWith("대전")) return "대전";
+  if (normalized.startsWith("울산")) return "울산";
+  if (normalized.startsWith("세종")) return "세종";
+  if (normalized.startsWith("경기")) return "경기";
+  if (normalized.startsWith("강원")) return "강원";
+  if (normalized.startsWith("충북")) return "충북";
+  if (normalized.startsWith("충남")) return "충남";
+  if (normalized.startsWith("전북")) return "전북";
+  if (normalized.startsWith("전남")) return "전남";
+  if (normalized.startsWith("경북")) return "경북";
+  if (normalized.startsWith("경남")) return "경남";
+  if (normalized.startsWith("제주")) return "제주";
+
+  if (normalized.startsWith("서울특별시")) return "서울";
+  if (normalized.startsWith("부산광역시")) return "부산";
+  if (normalized.startsWith("대구광역시")) return "대구";
+  if (normalized.startsWith("인천광역시")) return "인천";
+  if (normalized.startsWith("광주광역시")) return "광주";
+  if (normalized.startsWith("대전광역시")) return "대전";
+  if (normalized.startsWith("울산광역시")) return "울산";
+  if (normalized.startsWith("세종특별자치시")) return "세종";
+  if (normalized.startsWith("경기도")) return "경기";
+  if (normalized.startsWith("강원도")) return "강원";
+  if (normalized.startsWith("충청북도")) return "충북";
+  if (normalized.startsWith("충청남도")) return "충남";
+  if (normalized.startsWith("전라북도")) return "전북";
+  if (normalized.startsWith("전라남도")) return "전남";
+  if (normalized.startsWith("경상북도")) return "경북";
+  if (normalized.startsWith("경상남도")) return "경남";
+  if (normalized.startsWith("제주특별자치도")) return "제주";
+
+  return "";
+}
+
+function getStatusBadgeClass(status?: string | null) {
+  switch (status) {
+    case "검토중":
+      return "bg-blue-100 text-blue-700";
+    case "제안완료":
+      return "bg-purple-100 text-purple-700";
+    case "운영중":
+      return "bg-green-100 text-green-700";
+    case "보류":
+      return "bg-red-100 text-red-700";
+    case "미접촉":
+    default:
+      return "bg-gray-100 text-gray-700";
+  }
+}
+
 export default function HomePage() {
   const [hotels, setHotels] = useState<Hotel[]>([]);
   const [loading, setLoading] = useState(false);
@@ -17,6 +75,11 @@ export default function HomePage() {
   const [selectedRegion, setSelectedRegion] = useState("전체");
 
   const [selectedHotel, setSelectedHotel] = useState<Hotel | null>(null);
+
+  const [editBranchName, setEditBranchName] = useState("");
+  const [editAddress, setEditAddress] = useState("");
+  const [editRegion, setEditRegion] = useState("");
+  const [editRooms, setEditRooms] = useState("");
   const [editStatus, setEditStatus] = useState("미접촉");
   const [editMemo, setEditMemo] = useState("");
 
@@ -58,6 +121,7 @@ export default function HomePage() {
         ...hotel,
         latitude: data.latitude,
         longitude: data.longitude,
+        region: hotel.region || extractRegionFromAddress(hotel.address),
       });
     }
 
@@ -142,6 +206,10 @@ export default function HomePage() {
 
   function handleSelectHotel(hotel: Hotel) {
     setSelectedHotel(hotel);
+    setEditBranchName(hotel.branch_name ?? "");
+    setEditAddress(hotel.address ?? "");
+    setEditRegion(hotel.region ?? extractRegionFromAddress(hotel.address ?? ""));
+    setEditRooms(String(hotel.rooms ?? ""));
     setEditStatus(hotel.status ?? "미접촉");
     setEditMemo(hotel.memo ?? "");
   }
@@ -152,9 +220,28 @@ export default function HomePage() {
       return;
     }
 
+    const finalRegion = editRegion.trim() || extractRegionFromAddress(editAddress);
+    let latitude = selectedHotel.latitude ?? null;
+    let longitude = selectedHotel.longitude ?? null;
+
+    if (editAddress.trim() !== selectedHotel.address) {
+      const geocodeRes = await fetch(
+        `/api/geocode?address=${encodeURIComponent(editAddress)}`
+      );
+      const geocodeData = await geocodeRes.json();
+      latitude = geocodeData.latitude ?? null;
+      longitude = geocodeData.longitude ?? null;
+    }
+
     const { error } = await supabase
       .from("hotels")
       .update({
+        branch_name: editBranchName.trim(),
+        address: editAddress.trim(),
+        region: finalRegion,
+        rooms: Number(editRooms || 0),
+        latitude,
+        longitude,
         status: editStatus,
         memo: editMemo,
       })
@@ -168,17 +255,35 @@ export default function HomePage() {
 
     const nextHotels = hotels.map((hotel) =>
       hotel.id === selectedHotel.id
-        ? { ...hotel, status: editStatus, memo: editMemo }
+        ? {
+            ...hotel,
+            branch_name: editBranchName.trim(),
+            address: editAddress.trim(),
+            region: finalRegion,
+            rooms: Number(editRooms || 0),
+            latitude,
+            longitude,
+            status: editStatus,
+            memo: editMemo,
+          }
         : hotel
     );
 
     setHotels(nextHotels);
-    setSelectedHotel({
+
+    const updatedHotel = {
       ...selectedHotel,
+      branch_name: editBranchName.trim(),
+      address: editAddress.trim(),
+      region: finalRegion,
+      rooms: Number(editRooms || 0),
+      latitude,
+      longitude,
       status: editStatus,
       memo: editMemo,
-    });
+    };
 
+    setSelectedHotel(updatedHotel);
     alert("수정 완료");
   }
 
@@ -207,6 +312,10 @@ export default function HomePage() {
 
     setHotels((prev) => prev.filter((hotel) => hotel.id !== selectedHotel.id));
     setSelectedHotel(null);
+    setEditBranchName("");
+    setEditAddress("");
+    setEditRegion("");
+    setEditRooms("");
     setEditStatus("미접촉");
     setEditMemo("");
 
@@ -214,11 +323,6 @@ export default function HomePage() {
   }
 
   async function createNewHotel() {
-    if (!newRegion.trim()) {
-      alert("지역을 입력하세요.");
-      return;
-    }
-
     if (!newBranchName.trim()) {
       alert("지점명을 입력하세요.");
       return;
@@ -239,12 +343,13 @@ export default function HomePage() {
 
       const latitude = geocodeData.latitude ?? null;
       const longitude = geocodeData.longitude ?? null;
+      const autoRegion = extractRegionFromAddress(newAddress);
 
       const { data, error } = await supabase
         .from("hotels")
         .insert([
           {
-            region: newRegion.trim(),
+            region: autoRegion || newRegion.trim(),
             branch_name: newBranchName.trim(),
             address: newAddress.trim(),
             rooms: Number(newRooms || 0),
@@ -284,38 +389,6 @@ export default function HomePage() {
     }
 
     setCreating(false);
-  }
-
-  function getStatusTextClass(status?: string | null) {
-    switch (status) {
-      case "검토중":
-        return "text-blue-700";
-      case "제안완료":
-        return "text-purple-700";
-      case "운영중":
-        return "text-green-700";
-      case "보류":
-        return "text-red-600";
-      case "미접촉":
-      default:
-        return "text-gray-600";
-    }
-  }
-
-  function getStatusBadgeClass(status?: string | null) {
-    switch (status) {
-      case "검토중":
-        return "bg-blue-100 text-blue-700";
-      case "제안완료":
-        return "bg-purple-100 text-purple-700";
-      case "운영중":
-        return "bg-green-100 text-green-700";
-      case "보류":
-        return "bg-red-100 text-red-700";
-      case "미접촉":
-      default:
-        return "bg-gray-100 text-gray-700";
-    }
   }
 
   function downloadCsv() {
@@ -412,7 +485,7 @@ export default function HomePage() {
 
         <button
           onClick={downloadCsv}
-          className="rounded bg-gray-600 px-4 py-2 text-white"
+          className="rounded bg-gray-700 px-4 py-2 text-white"
         >
           CSV 다운로드
         </button>
@@ -463,21 +536,24 @@ export default function HomePage() {
                   <button
                     key={`${hotel.branch_name}-${hotel.address}-${hotel.id ?? "noid"}`}
                     onClick={() => handleSelectHotel(hotel)}
-                    className={`w-full rounded border p-3 text-left transition ${
+                    className={`w-full rounded border p-3 text-left transition duration-200 ${
                       isSelected
-                        ? "border-blue-500 bg-blue-50"
-                        : "border-gray-200 bg-white hover:bg-gray-50"
+                        ? "border-blue-500 bg-blue-50 shadow-md ring-2 ring-blue-200 scale-[1.01]"
+                        : "border-gray-200 bg-white hover:bg-gray-50 hover:shadow-sm"
                     }`}
                   >
                     <div className="text-lg font-semibold text-gray-900">
                       {hotel.branch_name}
                     </div>
+
                     <div className="mt-1 text-sm text-gray-700">
                       {hotel.region} · 객실수 {hotel.rooms}
                     </div>
+
                     <div className="mt-1 text-sm text-gray-600">
                       {hotel.address}
                     </div>
+
                     <div className="mt-3">
                       <span
                         className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${getStatusBadgeClass(
@@ -512,23 +588,51 @@ export default function HomePage() {
           ) : (
             <div className="space-y-4">
               <div>
-                <div className="text-sm text-gray-500">지점명</div>
-                <div className="font-medium">{selectedHotel.branch_name}</div>
+                <label className="mb-1 block text-sm text-gray-600">
+                  지점명
+                </label>
+                <input
+                  type="text"
+                  value={editBranchName}
+                  onChange={(e) => setEditBranchName(e.target.value)}
+                  className={inputClass}
+                />
               </div>
 
               <div>
-                <div className="text-sm text-gray-500">지역</div>
-                <div>{selectedHotel.region}</div>
+                <label className="mb-1 block text-sm text-gray-600">주소</label>
+                <input
+                  type="text"
+                  value={editAddress}
+                  onChange={(e) => {
+                    const nextAddress = e.target.value;
+                    setEditAddress(nextAddress);
+                    setEditRegion(extractRegionFromAddress(nextAddress));
+                  }}
+                  className={inputClass}
+                />
               </div>
 
               <div>
-                <div className="text-sm text-gray-500">주소</div>
-                <div>{selectedHotel.address}</div>
+                <label className="mb-1 block text-sm text-gray-600">지역</label>
+                <input
+                  type="text"
+                  value={editRegion}
+                  onChange={(e) => setEditRegion(e.target.value)}
+                  className={inputClass}
+                />
               </div>
 
               <div>
-                <div className="text-sm text-gray-500">객실수</div>
-                <div>{selectedHotel.rooms}</div>
+                <label className="mb-1 block text-sm text-gray-600">
+                  객실수
+                </label>
+                <input
+                  type="number"
+                  value={editRooms}
+                  onChange={(e) => setEditRooms(e.target.value)}
+                  className={inputClass}
+                />
               </div>
 
               <div>
@@ -562,7 +666,7 @@ export default function HomePage() {
                   onClick={updateSelectedHotel}
                   className="rounded bg-purple-700 px-4 py-2 text-white"
                 >
-                  상태 / 메모 저장
+                  상세 정보 저장
                 </button>
 
                 <button
@@ -581,17 +685,6 @@ export default function HomePage() {
             <h2 className="text-lg font-semibold">신규 호텔 등록</h2>
 
             <div>
-              <label className="mb-1 block text-sm text-gray-600">지역</label>
-              <input
-                type="text"
-                value={newRegion}
-                onChange={(e) => setNewRegion(e.target.value)}
-                className={inputClass}
-                placeholder="예: 서울"
-              />
-            </div>
-
-            <div>
               <label className="mb-1 block text-sm text-gray-600">지점명</label>
               <input
                 type="text"
@@ -607,10 +700,25 @@ export default function HomePage() {
               <input
                 type="text"
                 value={newAddress}
-                onChange={(e) => setNewAddress(e.target.value)}
+                onChange={(e) => {
+                  const nextAddress = e.target.value;
+                  setNewAddress(nextAddress);
+                  setNewRegion(extractRegionFromAddress(nextAddress));
+                }}
                 autoComplete="off"
                 className={inputClass}
                 placeholder="도로명주소 입력"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm text-gray-600">지역</label>
+              <input
+                type="text"
+                value={newRegion}
+                onChange={(e) => setNewRegion(e.target.value)}
+                className={inputClass}
+                placeholder="주소 기반 자동 입력"
               />
             </div>
 
