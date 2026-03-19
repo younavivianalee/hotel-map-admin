@@ -385,6 +385,17 @@ export default function HomePage() {
         handleSelectHotel(createdHotel);
       }
 
+      await fetch("/api/update-csv", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          region: autoRegion || newRegion.trim(),
+          branch_name: newBranchName.trim(),
+          address: newAddress.trim(),
+          rooms: Number(newRooms || 0),
+        }),
+      });
+
       setNewRegion("");
       setNewBranchName("");
       setNewAddress("");
