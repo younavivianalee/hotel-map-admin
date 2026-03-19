@@ -23,9 +23,6 @@ export default function HotelMap({
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
-  const openInfoWindowRef = useRef<any>(null);
-  const onSelectHotelRef = useRef(onSelectHotel);
-  onSelectHotelRef.current = onSelectHotel;
 
   useEffect(() => {
     const kakaoKey = process.env.NEXT_PUBLIC_KAKAO_JS_KEY;
@@ -54,10 +51,6 @@ export default function HotelMap({
 
         markersRef.current.forEach((marker) => marker.setMap(null));
         markersRef.current = [];
-        if (openInfoWindowRef.current) {
-          openInfoWindowRef.current.close();
-          openInfoWindowRef.current = null;
-        }
 
         if (validHotels.length === 0) return;
 
@@ -73,41 +66,37 @@ export default function HotelMap({
 
           const isSelected = hotel.id === selectedHotelId;
 
-          const marker = new window.kakao.maps.Marker({
-            position,
-            map,
-            image: new window.kakao.maps.MarkerImage(
-              isSelected
-                ? "https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/markerStar.png"
-                : "https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker_red.png",
-              new window.kakao.maps.Size(
-                isSelected ? 40 : 28,
-                isSelected ? 55 : 38
-              )
-            ),
-          });
+          const marker = new window.kakao.maps.Marker(
+            isSelected
+              ? {
+                  position,
+                  map,
+                  image: new window.kakao.maps.MarkerImage(
+                    "https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/markerStar.png",
+                    new window.kakao.maps.Size(24, 35)
+                  ),
+                }
+              : {
+                  position,
+                  map,
+                }
+          );
 
           const infoWindow = new window.kakao.maps.InfoWindow({
             content: `
-              <div style="padding:10px; font-size:13px; color:#111; background:#fff; border-radius:6px; line-height:1.6;">
-                <strong style="font-size:14px; color:#000;">${hotel.branch_name}</strong><br/>
-                <span style="color:#444;">${hotel.address}</span><br/>
-                <span style="color:#555;">객실수: ${hotel.rooms}</span><br/>
-                <span style="color:#1d4ed8; font-weight:600;">상태: ${hotel.status ?? "미접촉"}</span>
+              <div style="padding:10px; font-size:13px;">
+                <strong>${hotel.branch_name}</strong><br/>
+                ${hotel.address}<br/>
+                객실수: ${hotel.rooms}<br/>
+                상태: ${hotel.status ?? "미접촉"}
               </div>
             `,
           });
 
           window.kakao.maps.event.addListener(marker, "click", () => {
             infoWindow.open(map, marker);
-            openInfoWindowRef.current = infoWindow;
-            onSelectHotelRef.current?.(hotel);
+            onSelectHotel?.(hotel);
           });
-
-          if (isSelected) {
-            infoWindow.open(map, marker);
-            openInfoWindowRef.current = infoWindow;
-          }
 
           markersRef.current.push(marker);
         });
@@ -133,12 +122,17 @@ export default function HotelMap({
       });
     };
 
+    if (window.kakao) {
+      renderMap();
+      return;
+    }
+
     const existingScript = document.querySelector(
       'script[src*="dapi.kakao.com/v2/maps/sdk.js"]'
     ) as HTMLScriptElement | null;
 
-    if (existingScript && window.kakao) {
-      renderMap();
+    if (existingScript) {
+      existingScript.addEventListener("load", renderMap);
       return;
     }
 
@@ -148,13 +142,7 @@ export default function HotelMap({
     script.onload = renderMap;
 
     document.head.appendChild(script);
-
-    return () => {
-      if (script.parentNode) {
-        script.parentNode.removeChild(script);
-      }
-    };
-  }, [hotels, selectedHotelId]);
+  }, [hotels, selectedHotelId, onSelectHotel]);
 
   return <div ref={mapRef} style={{ width: "100%", height: "700px" }} />;
 }
