@@ -24,6 +24,8 @@ export default function HotelMap({
   const mapInstanceRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
   const openInfoWindowRef = useRef<any>(null);
+  const onSelectHotelRef = useRef(onSelectHotel);
+  onSelectHotelRef.current = onSelectHotel;
 
   useEffect(() => {
     const kakaoKey = process.env.NEXT_PUBLIC_KAKAO_JS_KEY;
@@ -99,7 +101,7 @@ export default function HotelMap({
           window.kakao.maps.event.addListener(marker, "click", () => {
             infoWindow.open(map, marker);
             openInfoWindowRef.current = infoWindow;
-            onSelectHotel?.(hotel);
+            onSelectHotelRef.current?.(hotel);
           });
 
           if (isSelected) {
@@ -152,7 +154,7 @@ export default function HotelMap({
         script.parentNode.removeChild(script);
       }
     };
-  }, [hotels, selectedHotelId, onSelectHotel]);
+  }, [hotels, selectedHotelId]);
 
   return <div ref={mapRef} style={{ width: "100%", height: "700px" }} />;
 }
